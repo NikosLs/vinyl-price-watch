@@ -78,6 +78,12 @@ def parse(shop, x):
     labels = list(at.get("Label", [])) + [t for t in tags if "record" in t.lower()]
     if lm and len(lm.group(1)) < 70:
         labels += [l.strip(" .,") for l in re.split(r",\s*|/", lm.group(1)) if l.strip(" .,")]
+    uniq = {}
+    for l in labels:  # drop repeats such as "partisan records" / "Partisan Records", keeping the nicer spelling
+        k = l.lower()
+        if k not in uniq or (uniq[k].islower() and not l.islower()):
+            uniq[k] = l
+    labels = list(uniq.values())
     year = (at.get("Release Year") or [""])[0]
     used = shop["kind"] == "used" or bool(re.search(r"used", variant, re.I))
     genre = next((c for c in cats if "|" in c and "Upcoming" not in c), "") or next(
