@@ -4,7 +4,7 @@ import re
 from .common import norm
 
 COLOURS = ("red white blue yellow clear orange pink green purple splatter gold silver grey gray marble transparent "
-           "translucent picture brown violet turquoise coloured colored smoke swirl neon magenta bronze cream maroon crystal").split()
+           "translucent picture brown violet turquoise coloured colored smoke swirl neon magenta bronze cream maroon crystal graphite burgundy fuchsia fuschia bone galaxy lavender mustard beige olive teal aqua cyan ruby amber peach").split()
 EUROPE = {"Europe", "Germany", "UK", "Netherlands", "Italy", "France", "UK & Europe", "Spain", "Belgium", "Austria",
           "Sweden", "Scandinavia", "Benelux", "Switzerland"}
 VINYL_SIZES = ('7"', '10"', '12"')
@@ -58,9 +58,12 @@ def _score(hit, it, labs, cols, title, used):
         s += 3 if str(y) == it["year"] else 0
     elif not used:  # new stock is almost always the current pressing
         s += 3 if y >= 2022 else 2 if y >= 2015 else 1 if y >= 2005 else 0
+    c = hit.get("country", "")
     if used:
-        c = hit.get("country", "")
         s += 2 if c == "Greece" else 1 if c in EUROPE else 0
+    else:  # new stock in a Greek shop is the European (or worldwide) pressing far more often than a licensed one
+        s += 1 if (c in EUROPE or "Europe" in c or c == "Greece") else 0
+    if "Unofficial Release" in f: s -= 2
     txt = norm(" ".join((x.get("text") or "") for x in hit.get("formats", [])))
     hc = {c for c in COLOURS if c in txt}
     if cols:

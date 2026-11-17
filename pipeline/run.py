@@ -1,6 +1,6 @@
 """Weekly refresh: download every shop, match new records on Discogs, refresh prices, publish encrypted data.
 
-Usage:  python -m pipeline.run [--xlsx] [--no-fetch]
+Usage:  python -m pipeline.run [--xlsx] [--no-fetch] [--rebuild]
 Needs DISCOGS_TOKEN and APP_PASSWORD (environment or a local .env file).
 """
 import datetime, json, os, sys, time
@@ -18,22 +18,36 @@ GRADE = {"Mint": "Mint (M)", "Near Mint": "Near Mint (NM or M-)", "Very Good Plu
          "Very Good": "Very Good (VG)", "Good Plus": "Good Plus (G+)", "Good": "Good (G)", "Fair": "Fair (F)", "Poor": "Poor (P)"}
 
 
+FAR = {"Argentina", "Brazil", "Mexico", "Japan", "Russia", "Ukraine", "South Korea", "Taiwan", "China", "Indonesia",
+       "Malaysia", "Thailand", "Colombia", "Chile", "Venezuela", "Peru", "South Africa", "India"}
+
+
 def confidence(m, it):
+    """How sure we are that the Discogs release is the very edition the shop sells."""
     if not m.get("release_id"):
         return ""
     if m["match"] in ("catno", "barcode"):
-        return "exact" if not m.get("tie") else "high"
-    if m["match"] == "artist+title" and not it["used"]:
-        # a plain record matched to a coloured pressing (or the reverse) is probably a different edition
+        conf = "exact" if not m.get("tie") else "high"
+    elif m["match"] == "artist+title":
+        ok = (m.get("title_ok") or m.get("year_ok")) and (m.get("label_ok") or not it["labels"])
+        conf = "high" if ok else "medium"
+    else:
+        return "low"
+    if not it["used"]:
+        # New stock: these signs point to a different edition sharing the title or the barcode.
         want = {c for c in COLOURS if c in norm(it["variant"])}
         got = {c for c in COLOURS if c in norm(m.get("d_text") or "")}
         if bool(want) != bool(got) or (want and not want & got):
-            return "medium"
-    if m["match"] == "artist+title" and (m.get("title_ok") or m.get("year_ok")) and (m.get("label_ok") or not it["labels"]):
-        return "high"
-    if m["match"] == "artist+title":
-        return "medium"
-    return "low"
+            conf = "medium"   # plain record against a coloured pressing, or the reverse
+        if m.get("d_country") in FAR:
+            conf = "medium"   # licensed pressing from another continent
+        try:
+            year = int(m.get("d_year") or 0)
+        except Exception:
+            year = 0
+        if m["match"] == "artist+title" and year and year < datetime.date.today().year - 15:
+            conf = "low"      # a shop selling new copies almost never has the decades-old original
+    return conf
 
 
 def flag(it, m, p, conf):
@@ -42,13 +56,15 @@ def flag(it, m, p, conf):
         return "not music", None, None
     if not m.get("release_id"):
         return "no Discogs match", None, None
+    if "Unofficial" in (m.get("d_format") or ""):
+        return "no Discogs price", None, None   # bootlegs cannot be sold on Discogs, so its prices mean nothing
     grade = GRADE.get(it["media"], "Very Good Plus (VG+)") if it["used"] else "Near Mint (NM or M-)"
     ref = ((p or {}).get("sugg") or {}).get(grade)
     if not ref:
         return "no Discogs price", None, None
     ratio, low = round(it["price"] / ref, 2), (p or {}).get("low")
-    if ratio <= 0.85 and conf == "low":
-        return "check match", ref, ratio
+    if ratio <= 0.85 and (conf not in ("exact", "high") or ratio <= 0.4):
+        return "check match", ref, ratio        # too good to be true, or not surely the same edition
     if ratio <= 0.85 and (not low or it["price"] <= low * 1.1):
         return "BUY", ref, ratio
     if ratio <= 0.85:
@@ -129,13 +145,14 @@ def main():
     state = decrypt_json(open(STATE, "rb").read(), password) if os.path.exists(STATE) else {}
     for k in ("matches", "catnos", "prices", "items", "seen", "was", "fetched"):
         state.setdefault(k, {})
+    rebuild = "--rebuild" in sys.argv   # only recompute verdicts from what is stored: no downloads, no Discogs calls
     dg = Discogs(token)
     today = datetime.date.today().isoformat()
     out_of_time = lambda: time.time() - t0 > TIME_BUDGET
     stale = []
-    save = lambda: open(STATE, "wb").write(encrypt_json(state, password))  # checkpoint, so an interrupted run loses nothing
+    save = lambda: None if rebuild else open(STATE, "wb").write(encrypt_json(state, password))  # checkpoint: an interrupted run loses nothing
 
-    for shop in shops:
+    for shop in ([] if rebuild else shops):
         sid = shop["id"]
         for k in ("matches", "catnos", "seen", "was"):
             state[k].setdefault(sid, {})
@@ -187,7 +204,7 @@ def main():
     save()
     used = {str(m["release_id"]) for s in state["matches"].values() for m in s.values() if m.get("release_id")}
     state["prices"] = {rid: p for rid, p in state["prices"].items() if rid in used}
-    todo = sorted((rid for rid in used if time.time() - state["prices"].get(rid, {}).get("ts", 0) > PRICE_MAX_AGE),
+    todo = [] if rebuild else sorted((rid for rid in used if time.time() - state["prices"].get(rid, {}).get("ts", 0) > PRICE_MAX_AGE),
                   key=lambda rid: state["prices"].get(rid, {}).get("ts", 0))
     done = 0
     for rid in todo:
