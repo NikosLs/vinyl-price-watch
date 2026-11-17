@@ -14,5 +14,14 @@
     "query": "",
     "kind": "new",
     "catno_from_page": false
+  },
+  {
+    "id": "coma",
+    "name": "Coma Records",
+    "base": "https://comarecords.com",
+    "query": "&category=47",
+    "kind": "new",
+    "catno_from_page": false,
+    "variant": "parens"
   }
 ]

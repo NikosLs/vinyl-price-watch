@@ -61,7 +61,13 @@ def parse(shop, x):
     tags = [html.unescape(t["name"]) for t in x.get("tags", [])]
     at = {a["name"]: [html.unescape(t["name"]) for t in a["terms"]] for a in x.get("attributes", [])}
     cj = " | ".join(cats)
-    if len(parts) >= 3:
+    parens = shop.get("variant") == "parens"  # "Artist – Title (2LP Red)"
+    if parens:
+        pm = re.search(r"\s*\(([^()]*)\)\s*$", name)
+        core = re.split(r"\s+[–-]\s+", name[:pm.start()] if pm else name, maxsplit=1)
+        artist, title = (core[0], core[1]) if len(core) == 2 else ("", core[0])
+        variant = pm.group(1).strip() if pm else ""
+    elif len(parts) >= 3:
         artist, title, variant = parts[0], " – ".join(parts[1:-1]), parts[-1]
     elif len(parts) == 2:
         artist, title, variant = parts[0], parts[1], ""
@@ -71,6 +77,8 @@ def parse(shop, x):
         artist = at["Artist"][0]
     desc = strip_html(x.get("short_description")) or strip_html(x.get("description"))
     fmt = detect_format(variant) or detect_format(" ".join(at.get("Format", [])))
+    if not fmt and parens:
+        fmt = detect_format(name) or "LP"
     if not fmt:
         fmt = "Merch/Other" if any(k in cj.lower() for k in MERCH) else (detect_format(cj) or ("LP" if at.get("Format") else "Merch/Other"))
     bm = re.search(r"(?:UPC|EAN|Barcode)\s*:?\s*([\d][\d \-]{7,18}\d)", desc, re.I)
@@ -87,12 +95,13 @@ def parse(shop, x):
     year = (at.get("Release Year") or [""])[0]
     used = shop["kind"] == "used" or bool(re.search(r"used", variant, re.I))
     genre = next((c for c in cats if "|" in c and "Upcoming" not in c), "") or next(
-        (c for c in cats if c not in ("New Arrivals", "Store", "Sale") and not detect_format(c)), "")
+        (c for c in cats if c not in ("New Arrivals", "Store", "Sale") and not c.isupper() and not detect_format(c)), "")
     return {
         "id": str(x["id"]), "name": name, "artist": artist, "title": title, "variant": variant, "format": fmt,
         "price": int(x["prices"]["price"]) / 100, "regular": int(x["prices"]["regular_price"]) / 100,
         "sale": bool(x.get("on_sale")), "stock": bool(x.get("is_in_stock")),
-        "pre": ("Upcoming | Pre-order" in cats) or bool(re.search(r"UPCOMING|PRE-ORDER", name, re.I)),
+        "back": bool(x.get("is_on_backorder")),
+        "pre": ("Upcoming | Pre-order" in cats) or any(c.upper().startswith("PRE-ORDER") for c in cats) or bool(re.search(r"UPCOMING|PRE-ORDER", name, re.I)),
         "used": used, "media": (at.get("Media Condition") or [""])[0], "sleeve": (at.get("Sleeve Condition") or [""])[0],
         "labels": labels, "year": year if re.fullmatch(r"(19|20)\d\d", year) else "",
         "barcode": re.sub(r"\D", "", bm.group(1)) if bm else "", "genre": genre, "desc": desc[:700], "url": x["permalink"],

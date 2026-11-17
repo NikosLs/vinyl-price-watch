@@ -4,7 +4,7 @@ import re
 from .common import norm
 
 COLOURS = ("red white blue yellow clear orange pink green purple splatter gold silver grey gray marble transparent "
-           "translucent picture brown violet turquoise coloured colored smoke swirl neon magenta").split()
+           "translucent picture brown violet turquoise coloured colored smoke swirl neon magenta bronze cream maroon crystal").split()
 EUROPE = {"Europe", "Germany", "UK", "Netherlands", "Italy", "France", "UK & Europe", "Spain", "Belgium", "Austria",
           "Sweden", "Scandinavia", "Benelux", "Switzerland"}
 VINYL_SIZES = ('7"', '10"', '12"')
@@ -78,7 +78,7 @@ def match_item(dg, it, catno=""):
     """Return a match dict (empty if nothing plausible was found)."""
     used = it["used"]
     artist = "Various" if it["artist"].upper().startswith("VARIOUS") or it["artist"].upper() == "V/A" else it["artist"].split(", ")[0]
-    title = re.sub(r"\s*\([^)]*\)\s*$", "", it["title"]).strip()
+    title = re.sub(r"(\s*[\(\[][^)\]]*[\)\]])+\s*$", "", it["title"]).strip() or it["title"]
     if re.fullmatch(r"(self[ -]?titled|s/t|same)", title, re.I):
         title = artist
     dfmt = {"CD": "CD", "Cassette": "Cassette", "Boxset": ""}.get(it["format"], "Vinyl")

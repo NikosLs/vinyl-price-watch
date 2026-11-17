@@ -5,8 +5,8 @@ Needs DISCOGS_TOKEN and APP_PASSWORD (environment or a local .env file).
 """
 import datetime, json, os, sys, time
 
-from .common import ROOT, Discogs, decrypt_json, encrypt_json, load_env
-from .match import match_item
+from .common import ROOT, Discogs, decrypt_json, encrypt_json, load_env, norm
+from .match import COLOURS, match_item
 from .shops import fetch_catno, fetch_products, parse
 
 STATE = os.path.join(ROOT, "state.enc")
@@ -23,6 +23,12 @@ def confidence(m, it):
         return ""
     if m["match"] in ("catno", "barcode"):
         return "exact" if not m.get("tie") else "high"
+    if m["match"] == "artist+title" and not it["used"]:
+        # a plain record matched to a coloured pressing (or the reverse) is probably a different edition
+        want = {c for c in COLOURS if c in norm(it["variant"])}
+        got = {c for c in COLOURS if c in norm(m.get("d_text") or "")}
+        if bool(want) != bool(got) or (want and not want & got):
+            return "medium"
     if m["match"] == "artist+title" and (m.get("title_ok") or m.get("year_ok")) and (m.get("label_ok") or not it["labels"]):
         return "high"
     if m["match"] == "artist+title":
@@ -64,7 +70,7 @@ def build_rows(state, shops):
                 "format": it["format"], "cond": (it["media"] or "Used") if it["used"] else "New", "sleeve": it["sleeve"],
                 "price": it["price"], "was": state["was"].get(sid, {}).get(it["id"]), "dg": ref,
                 "low": (p or {}).get("low"), "nfs": (p or {}).get("n"), "want": m.get("want"), "have": m.get("have"),
-                "conf": conf, "how": m.get("match", ""), "stock": it["stock"], "pre": it["pre"], "sale": it["sale"],
+                "conf": conf, "how": m.get("match", ""), "stock": it["stock"], "back": it.get("back", False), "pre": it["pre"], "sale": it["sale"],
                 "genre": it["genre"], "label": ", ".join(it["labels"][:2]), "seen": state["seen"].get(sid, {}).get(it["id"], ""),
                 "dtitle": m.get("d_title", ""), "dyear": m.get("d_year", ""), "dcountry": m.get("d_country", ""),
                 "dlabel": m.get("d_label", ""), "dcat": m.get("d_catno", ""),
@@ -127,6 +133,7 @@ def main():
     today = datetime.date.today().isoformat()
     out_of_time = lambda: time.time() - t0 > TIME_BUDGET
     stale = []
+    save = lambda: open(STATE, "wb").write(encrypt_json(state, password))  # checkpoint, so an interrupted run loses nothing
 
     for shop in shops:
         sid = shop["id"]
@@ -138,7 +145,7 @@ def main():
                 print(f"[{sid}] could not download the catalogue; keeping last week's copy", flush=True)
                 stale.append(sid)
             else:
-                items = [parse(shop, x) for x in raw]
+                items = [it for it in (parse(shop, x) for x in raw) if it["price"] > 0]
                 old = {it["id"]: it["price"] for it in state["items"].get(sid, [])}
                 first_run = not state["seen"][sid]
                 for it in items:
@@ -149,7 +156,7 @@ def main():
                 state["fetched"][sid] = today
                 print(f"[{sid}] {len(items)} products", flush=True)
         new = 0
-        for it in state["items"].get(sid, []):
+        for it in sorted(state["items"].get(sid, []), key=lambda it: not it["stock"]):  # records you can buy first
             if it["format"] == "Merch/Other" or out_of_time():
                 continue
             m = state["matches"][sid].get(it["id"])
@@ -169,12 +176,15 @@ def main():
             new += 1
             if new % 25 == 0:
                 print(f"[{sid}] matched {new} new records", flush=True)
+            if new % 100 == 0:
+                save()
         live = {it["id"] for it in state["items"].get(sid, [])}
         if sid not in stale and live:  # forget products the shop no longer lists
             for k in ("matches", "catnos", "was"):
                 state[k][sid] = {pid: v for pid, v in state[k][sid].items() if pid in live}
         print(f"[{sid}] {new} newly matched", flush=True)
 
+    save()
     used = {str(m["release_id"]) for s in state["matches"].values() for m in s.values() if m.get("release_id")}
     state["prices"] = {rid: p for rid, p in state["prices"].items() if rid in used}
     todo = sorted((rid for rid in used if time.time() - state["prices"].get(rid, {}).get("ts", 0) > PRICE_MAX_AGE),
@@ -187,6 +197,7 @@ def main():
         done += 1
         if done % 100 == 0:
             print(f"prices refreshed {done}/{len(todo)}", flush=True)
+            save()
     print(f"prices refreshed {done}/{len(todo)}; Discogs calls {dg.calls}", flush=True)
 
     rows = build_rows(state, shops)
@@ -195,7 +206,7 @@ def main():
             "rows": rows}
     os.makedirs(os.path.dirname(DATA), exist_ok=True)
     open(DATA, "wb").write(encrypt_json(data, password))
-    open(STATE, "wb").write(encrypt_json(state, password))
+    save()
     if "--xlsx" in sys.argv:
         os.makedirs(os.path.join(ROOT, "out"), exist_ok=True)
         write_xlsx(rows, os.path.join(ROOT, "out", "vinyl_price_watch.xlsx"))

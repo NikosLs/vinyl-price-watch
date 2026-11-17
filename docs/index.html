@@ -46,6 +46,7 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .f-BUY{background:var(--g2);font-weight:600}.f-fair{background:var(--y)}.f-above{background:var(--r1)}
 .f-below{background:var(--b)}.f-check{background:var(--n)}.f-none{background:transparent;color:var(--muted);padding-left:0}
 .ratio{display:inline-block;min-width:44px;text-align:center;border-radius:5px;padding:2px 6px;color:var(--chipink)}
+[hidden]{display:none!important}
 .more{display:block;margin:14px auto;padding:9px 18px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
 .badge{font-size:11px;border:1px solid var(--line);border-radius:4px;padding:0 5px;color:var(--muted);margin-left:5px;white-space:nowrap}
 .legend{font-size:12px;color:var(--muted);margin:10px 2px}
@@ -165,7 +166,7 @@ function draw(){
     return '<tr><td><span class="tag '+f[2]+'">'+f[1]+'</span></td>'
      +'<td class="num">'+(r.ratio==null?'':'<span class="ratio" style="background:'+ratioColor(r.ratio)+'">'+r.ratio.toFixed(2)+'</span>')+'</td>'
      +'<td><a href="'+esc(r.url)+'" target="_blank" rel="noopener"><b>'+esc(r.artist)+'</b> – '+esc(r.title)+'</a>'
-       +(r.sale?'<span class="badge">sale</span>':'')+(r.pre?'<span class="badge">pre-order</span>':'')+(!r.stock?'<span class="badge">out of stock</span>':'')
+       +(r.sale?'<span class="badge">sale</span>':'')+(r.pre?'<span class="badge">pre-order</span>':'')+(!r.stock?'<span class="badge">out of stock</span>':'')+(r.back?'<span class="badge">back-order</span>':'')
        +'<div class="small">'+esc([r.variant,r.label,r.genre].filter(Boolean).join(' · '))+'</div></td>'
      +'<td>'+esc(r.shop)+'</td><td>'+esc(r.format)+'</td><td>'+esc(r.cond)+(r.sleeve?'<div class="small">sleeve '+esc(r.sleeve)+'</div>':'')+'</td>'
      +'<td class="num"><b>'+eur(r.price)+'</b>'+(r.was!=null?'<div class="small">was '+eur(r.was)+'</div>':'')+'</td>'
@@ -175,6 +176,7 @@ function draw(){
      +'<td>'+dg+(r.rid?'<div class="small">'+esc([r.conf+(r.how?' ('+r.how+')':''),r.dyear,r.dcountry,r.dcat].filter(Boolean).join(' · '))+'</div><div class="small">'+esc(r.dfmt)+'</div>':'')+'</td></tr>';
   }).join('');
   $('more').hidden=view.length<=shown;
+  $('more').textContent='Show more ('+(view.length-shown).toLocaleString()+' remaining)';
 }
 </script>
 </body>

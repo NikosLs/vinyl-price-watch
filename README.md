@@ -1,6 +1,6 @@
 # Vinyl Price Watch
 
-Compares record-shop prices with Discogs and flags what is worth buying. Refreshed weekly by a GitHub Actions job and shown on a password-protected page (GitHub Pages, `docs/`).
+Compares record-shop prices with Discogs and flags what is worth buying. Refreshed weekly by a scheduled task (`refresh.bat`) and shown on a password-protected page (GitHub Pages, `docs/`).
 
 ## How it works
 
@@ -23,6 +23,7 @@ Add an entry to `shops.json`:
 
 - `base` is the address under which `/wp-json/wc/store/v1/products` answers (WooCommerce shops).
 - `query` optionally narrows the catalogue (e.g. an attribute filter).
+- `variant: "parens"` is for shops that name products `Artist – Title (2LP Red)`; without it the name is read as `Artist – Title – LP`.
 - `kind` is `used` (compare against the record's own grade) or `new` (compare against Near Mint).
 
 Shops on other platforms need their own download function in `pipeline/shops.py`.
@@ -40,4 +41,4 @@ python -m pipeline.run --xlsx
 
 ## Secrets
 
-The GitHub job needs two repository secrets: `DISCOGS_TOKEN` and `APP_PASSWORD`. Changing `APP_PASSWORD` requires re-encrypting `state.enc` (run locally with the old password, then the new one).
+Both values live in the local `.env`. Changing `APP_PASSWORD` requires re-encrypting `state.enc` (run locally with the old password, then the new one).
