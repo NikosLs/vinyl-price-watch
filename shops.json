@@ -1,0 +1,18 @@
+[
+  {
+    "id": "discobole",
+    "name": "Discobole",
+    "base": "https://discobole.gr",
+    "query": "&attributes[0][attribute]=pa_format&attributes[0][slug]=vinyl-lp&attributes[1][attribute]=pa_condition&attributes[1][slug]=metacheirismena",
+    "kind": "used",
+    "catno_from_page": true
+  },
+  {
+    "id": "scarecrow",
+    "name": "Scarecrow Records",
+    "base": "https://scarecrow.gr/shop",
+    "query": "",
+    "kind": "new",
+    "catno_from_page": false
+  }
+]

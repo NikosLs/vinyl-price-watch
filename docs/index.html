@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Vinyl Price Watch</title>
+<style>
+:root{
+  --bg:#f6f5f1;--panel:#fff;--ink:#1c1b19;--muted:#6b675f;--line:#dedad0;--accent:#1f4e79;
+  --g2:#63be7b;--g1:#c6efce;--y:#fff2cc;--r1:#f8cbad;--r2:#f4877a;--b:#ddebf7;--n:#e7e6e6;--chipink:#1c1b19;
+}
+@media (prefers-color-scheme: dark){
+  :root{--bg:#161614;--panel:#1f1f1c;--ink:#ecebe6;--muted:#a09c92;--line:#35342f;--accent:#8fbde6;
+    --g2:#2f7d46;--g1:#27513a;--y:#5a4d1e;--r1:#6b3a2a;--r2:#8a2f27;--b:#2a4257;--n:#3a3935;--chipink:#f3f2ee;}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{padding:18px 16px 8px;max-width:1500px;margin:0 auto}
+h1{margin:0;font-size:22px;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:13px;margin-top:4px}
+main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
+.gate{max-width:360px;margin:14vh auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:24px}
+.gate input,.gate button{width:100%;padding:10px;font-size:15px;border-radius:6px;border:1px solid var(--line);margin-top:10px}
+.gate button{background:var(--accent);color:#fff;border:0;cursor:pointer}
+@media (prefers-color-scheme: dark){.gate button{color:#10212f}}
+.err{color:#c0392b;font-size:13px;min-height:18px;margin-top:8px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.chip{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:5px 12px;cursor:pointer;font-size:13px}
+.chip b{font-variant-numeric:tabular-nums}
+.chip.on{outline:2px solid var(--accent);outline-offset:1px}
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.filters select,.filters input[type=search]{padding:7px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font-size:13px}
+.filters input[type=search]{flex:1 1 200px;min-width:160px}
+.filters label{font-size:13px;color:var(--muted);display:flex;gap:5px;align-items:center;white-space:nowrap}
+.count{margin:12px 0 6px;color:var(--muted);font-size:13px}
+.wrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;min-width:1050px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{position:sticky;top:0;background:var(--panel);font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);cursor:pointer;white-space:nowrap;user-select:none}
+th.num,td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.small{font-size:12px;color:var(--muted)}
+.tag{display:inline-block;border-radius:5px;padding:2px 7px;font-size:12px;color:var(--chipink);white-space:nowrap}
+.f-BUY{background:var(--g2);font-weight:600}.f-fair{background:var(--y)}.f-above{background:var(--r1)}
+.f-below{background:var(--b)}.f-check{background:var(--n)}.f-none{background:transparent;color:var(--muted);padding-left:0}
+.ratio{display:inline-block;min-width:44px;text-align:center;border-radius:5px;padding:2px 6px;color:var(--chipink)}
+.more{display:block;margin:14px auto;padding:9px 18px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.badge{font-size:11px;border:1px solid var(--line);border-radius:4px;padding:0 5px;color:var(--muted);margin-left:5px;white-space:nowrap}
+.legend{font-size:12px;color:var(--muted);margin:10px 2px}
+</style>
+</head>
+<body>
+<div id="gate" class="gate">
+  <h1>Vinyl Price Watch</h1>
+  <div class="sub">Shop prices compared with Discogs. Enter the password to open.</div>
+  <form id="gf"><input id="pw" type="password" placeholder="Password" autocomplete="current-password" autofocus>
+  <button>Open</button></form>
+  <div id="gerr" class="err"></div>
+</div>
+<div id="app" hidden>
+<header>
+  <h1>Vinyl Price Watch</h1>
+  <div class="sub" id="meta"></div>
+</header>
+<main>
+  <div class="chips" id="chips"></div>
+  <div class="filters">
+    <input type="search" id="q" placeholder="Search artist, title, label…">
+    <select id="shop"></select>
+    <select id="fmt"></select>
+    <select id="conf">
+      <option value="0">Any match quality</option><option value="1">Medium or better</option>
+      <option value="2" selected>High or exact</option><option value="3">Exact only (barcode / cat. no.)</option>
+    </select>
+    <label><input type="checkbox" id="stock" checked> In stock</label>
+    <label><input type="checkbox" id="nopre" checked> Hide pre-orders</label>
+    <label><input type="checkbox" id="fresh"> New this week</label>
+  </div>
+  <div class="count" id="count"></div>
+  <div class="wrap"><table>
+    <thead><tr id="head"></tr></thead><tbody id="body"></tbody>
+  </table></div>
+  <button class="more" id="more" hidden>Show more</button>
+  <div class="legend">Ratio = shop price ÷ Discogs average price for the same condition (Near Mint for new records).
+  “Buy” means at least 15% under that average and no cheaper copy currently listed on Discogs.
+  Discogs prices exclude shipping. Always check the linked Discogs page is the same edition before buying.</div>
+</main>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const eur=v=>v==null?'':v.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
+const FLAGS=[['BUY','Buy','f-BUY'],['below average, cheaper copies exist','Below average','f-below'],['check match','Check match','f-check'],
+  ['fair','Fair','f-fair'],['above market','Above market','f-above'],['no Discogs price','No price','f-none'],['no Discogs match','No match','f-none'],['not music','Not music','f-none']];
+const FL=Object.fromEntries(FLAGS.map(f=>[f[0],f]));
+const CONF={'':-1,low:0,medium:1,high:2,exact:3};
+let DATA=null,rows=[],view=[],shown=100,sortKey='ratio',sortDir=1,flagSel=new Set(['BUY']);
+
+async function unlock(pw){
+  const buf=new Uint8Array(await (await fetch('data.enc',{cache:'no-store'})).arrayBuffer());
+  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
+  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:buf.slice(0,16),iterations:200000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:buf.slice(16,28)},key,buf.slice(28));
+  const text=await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+  return JSON.parse(text);
+}
+async function tryOpen(pw,silent){
+  try{
+    DATA=await unlock(pw);
+    try{localStorage.setItem('vpw',pw)}catch(e){}
+    $('gate').hidden=true;$('app').hidden=false;init();
+  }catch(e){ if(!silent) $('gerr').textContent='Wrong password, or the data could not be loaded.'; }
+}
+$('gf').addEventListener('submit',e=>{e.preventDefault();$('gerr').textContent='';tryOpen($('pw').value,false)});
+try{const s=localStorage.getItem('vpw'); if(s) tryOpen(s,true)}catch(e){}
+
+function ratioColor(v){return v<=.7?'var(--g2)':v<=.85?'var(--g1)':v<=1.15?'var(--y)':v<=1.5?'var(--r1)':'var(--r2)'}
+function weekAgo(){const d=new Date(Date.now()-8*864e5);return d.toISOString().slice(0,10)}
+
+function init(){
+  rows=DATA.rows;
+  const upd=new Date(DATA.updated);
+  $('meta').innerHTML='Updated '+upd.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})+' · '+
+    DATA.shops.map(s=>'<a href="'+esc(s.url)+'" target="_blank" rel="noopener">'+esc(s.name)+'</a>'+(s.stale?' (not refreshed this week)':'')).join(' · ')+
+    ' · '+rows.length.toLocaleString()+' products';
+  $('shop').innerHTML='<option value="">All shops</option>'+DATA.shops.map(s=>'<option>'+esc(s.name)+'</option>').join('');
+  const fm=[...new Set(rows.map(r=>r.format))].sort();
+  $('fmt').innerHTML='<option value="">All formats</option>'+fm.map(f=>'<option>'+esc(f)+'</option>').join('');
+  const cols=[['flag','Verdict'],['ratio','Ratio','num'],['artist','Record'],['shop','Shop'],['format','Format'],['cond','Condition'],
+    ['price','Shop price','num'],['dg','Discogs avg','num'],['low','Discogs lowest','num'],['want','Want / have','num'],['conf','Discogs match']];
+  $('head').innerHTML=cols.map(c=>'<th data-k="'+c[0]+'" class="'+(c[2]||'')+'">'+c[1]+'</th>').join('');
+  $('head').addEventListener('click',e=>{const k=e.target.dataset.k;if(!k)return;if(sortKey===k)sortDir=-sortDir;else{sortKey=k;sortDir=1}shown=100;render()});
+  for(const id of ['q','shop','fmt','conf','stock','nopre','fresh']) $(id).addEventListener('input',()=>{shown=100;render()});
+  $('more').addEventListener('click',()=>{shown+=200;draw()});
+  render();
+}
+function base(){
+  const q=$('q').value.trim().toLowerCase(),shop=$('shop').value,fmt=$('fmt').value,minc=+$('conf').value,wa=weekAgo();
+  return rows.filter(r=>(!shop||r.shop===shop)&&(!fmt||r.format===fmt)&&(!$('stock').checked||r.stock)&&(!$('nopre').checked||!r.pre)
+    &&(!$('fresh').checked||(r.seen&&r.seen>=wa))
+    &&(r.rid==null||CONF[r.conf]>=minc)
+    &&(!q||(r.artist+' '+r.title+' '+r.variant+' '+r.label+' '+r.genre+' '+r.dtitle).toLowerCase().includes(q)));
+}
+function render(){
+  const b=base(),cnt={};
+  for(const r of b) cnt[r.flag]=(cnt[r.flag]||0)+1;
+  $('chips').innerHTML=FLAGS.filter(f=>cnt[f[0]]).map(f=>'<button class="chip'+(flagSel.has(f[0])?' on':'')+'" data-f="'+esc(f[0])+'"><span class="tag '+f[2]+'">'+f[1]+'</span> <b>'+cnt[f[0]]+'</b></button>').join('')
+    +'<button class="chip'+(flagSel.size?'':' on')+'" data-f="">All <b>'+b.length+'</b></button>';
+  $('chips').onclick=e=>{const c=e.target.closest('.chip');if(!c)return;const f=c.dataset.f;if(!f)flagSel.clear();else flagSel.has(f)?flagSel.delete(f):flagSel.add(f);shown=100;render()};
+  view=b.filter(r=>!flagSel.size||flagSel.has(r.flag));
+  const k=sortKey,num=['ratio','price','dg','low','want'].includes(k);
+  view.sort((a,c)=>{let x=a[k],y=c[k];
+    if(k==='conf'){x=CONF[x];y=CONF[y]}
+    if(x==null||x==='')return 1;if(y==null||y==='')return -1;
+    return (num||k==='conf'?x-y:String(x).localeCompare(String(y)))*sortDir});
+  draw();
+}
+function draw(){
+  $('count').textContent=view.length.toLocaleString()+' records shown'+(view.length>shown?' (first '+shown+')':'');
+  $('body').innerHTML=view.slice(0,shown).map(r=>{
+    const f=FL[r.flag]||[r.flag,r.flag,'f-none'];
+    const dg=r.rid?'<a href="https://www.discogs.com/release/'+r.rid+'" target="_blank" rel="noopener">'+esc(r.dtitle||'Discogs')+'</a>':'';
+    return '<tr><td><span class="tag '+f[2]+'">'+f[1]+'</span></td>'
+     +'<td class="num">'+(r.ratio==null?'':'<span class="ratio" style="background:'+ratioColor(r.ratio)+'">'+r.ratio.toFixed(2)+'</span>')+'</td>'
+     +'<td><a href="'+esc(r.url)+'" target="_blank" rel="noopener"><b>'+esc(r.artist)+'</b> – '+esc(r.title)+'</a>'
+       +(r.sale?'<span class="badge">sale</span>':'')+(r.pre?'<span class="badge">pre-order</span>':'')+(!r.stock?'<span class="badge">out of stock</span>':'')
+       +'<div class="small">'+esc([r.variant,r.label,r.genre].filter(Boolean).join(' · '))+'</div></td>'
+     +'<td>'+esc(r.shop)+'</td><td>'+esc(r.format)+'</td><td>'+esc(r.cond)+(r.sleeve?'<div class="small">sleeve '+esc(r.sleeve)+'</div>':'')+'</td>'
+     +'<td class="num"><b>'+eur(r.price)+'</b>'+(r.was!=null?'<div class="small">was '+eur(r.was)+'</div>':'')+'</td>'
+     +'<td class="num">'+eur(r.dg)+'</td>'
+     +'<td class="num">'+eur(r.low)+(r.nfs!=null?'<div class="small">'+r.nfs+' for sale</div>':'')+'</td>'
+     +'<td class="num">'+(r.want==null?'':r.want+' / '+r.have)+'</td>'
+     +'<td>'+dg+(r.rid?'<div class="small">'+esc([r.conf+(r.how?' ('+r.how+')':''),r.dyear,r.dcountry,r.dcat].filter(Boolean).join(' · '))+'</div><div class="small">'+esc(r.dfmt)+'</div>':'')+'</td></tr>';
+  }).join('');
+  $('more').hidden=view.length<=shown;
+}
+</script>
+</body>
+</html>
