@@ -3,7 +3,7 @@
 Usage:  python -m pipeline.run [--xlsx] [--no-fetch] [--rebuild]
 Needs DISCOGS_TOKEN and APP_PASSWORD (environment or a local .env file).
 """
-import datetime, json, os, sys, time
+import datetime, json, os, re, sys, time
 
 from .common import ROOT, Discogs, decrypt_json, encrypt_json, load_env, norm
 from .match import COLOURS, match_item
@@ -39,6 +39,11 @@ def confidence(m, it):
         got = {c for c in COLOURS if c in norm(m.get("d_text") or "")}
         if bool(want) != bool(got) or (want and not want & got):
             conf = "medium"   # plain record against a coloured pressing, or the reverse
+        special = re.findall(r"limited|deluxe|special|numbered|signed|all media|box set|club edition|mispress|misprint|anniversary|picture",
+                             ((m.get("d_format") or "") + " " + (m.get("d_text") or "")).lower())
+        mine = (it["name"] + " " + it["desc"]).lower()
+        if m["match"] == "artist+title" and not (want & got) and any(w.split()[0] not in mine for w in special):
+            conf = "medium"   # Discogs entry is a limited / deluxe / boxed edition the shop does not mention
         if m.get("d_country") in FAR:
             conf = "medium"   # licensed pressing from another continent
         try:
@@ -65,10 +70,12 @@ def flag(it, m, p, conf):
     ratio, low = round(it["price"] / ref, 2), (p or {}).get("low")
     if ratio <= 0.85 and (conf not in ("exact", "high") or ratio <= 0.4):
         return "check match", ref, ratio        # too good to be true, or not surely the same edition
-    if ratio <= 0.85 and (not low or it["price"] <= low * 1.1):
+    # With plenty of copies listed, the cheapest listing is the real market price: the shop has to beat it.
+    n = (p or {}).get("n") or 0
+    if ratio <= 0.85 and (not low or it["price"] <= low * (0.9 if n >= 10 else 1.1)):
         return "BUY", ref, ratio
     if ratio <= 0.85:
-        return "below average, cheaper copies exist", ref, ratio
+        return "below average, but as cheap on Discogs", ref, ratio
     return ("fair" if ratio <= 1.15 else "above market"), ref, ratio
 
 
@@ -100,7 +107,7 @@ def write_xlsx(rows, path):
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
     from openpyxl.utils import get_column_letter
-    fill = {"BUY": "C6EFCE", "fair": "FFF2CC", "above market": "F8CBAD", "below average, cheaper copies exist": "DDEBF7", "check match": "E7E6E6"}
+    fill = {"BUY": "C6EFCE", "fair": "FFF2CC", "above market": "F8CBAD", "below average, but as cheap on Discogs": "DDEBF7", "check match": "E7E6E6"}
     cols = [("shop", "Shop"), ("flag", "Flag"), ("ratio", "Ratio shop / Discogs"), ("artist", "Artist"), ("title", "Title"),
             ("variant", "Variant"), ("format", "Format"), ("cond", "Condition"), ("price", "Shop price"), ("dg", "Discogs avg price"),
             ("low", "Discogs lowest listed"), ("nfs", "Copies for sale"), ("want", "Want"), ("have", "Have"), ("conf", "Match confidence"),
@@ -108,10 +115,18 @@ def write_xlsx(rows, path):
             ("dtitle", "Discogs title"), ("dyear", "Discogs year"), ("dcountry", "Discogs country"), ("dcat", "Discogs cat. no."),
             ("dfmt", "Discogs format"), ("durl", "Discogs link"), ("url", "Shop link")]
     wb = Workbook()
-    ws = wb.active
-    ws.title = "Shops vs Discogs"
+    wb.remove(wb.active)
+    shops = list(dict.fromkeys(r["shop"] for r in rows))
+    for title, part in [("Best buys", [r for r in rows if r["flag"] == "BUY"])] + [(sh, [r for r in rows if r["shop"] == sh]) for sh in shops]:
+        _sheet(wb.create_sheet(title[:31]), part, cols, fill)
+    wb.save(path)
+
+
+def _sheet(ws, rows, cols, fill):
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
     ws.append([c[1] for c in cols])
-    order = {"BUY": 0, "check match": 1, "below average, cheaper copies exist": 2, "fair": 3, "above market": 4}
+    order = {"BUY": 0, "check match": 1, "below average, but as cheap on Discogs": 2, "fair": 3, "above market": 4}
     for r in sorted(rows, key=lambda r: (order.get(r["flag"], 9), r["ratio"] if r["ratio"] is not None else 99)):
         r = dict(r, durl=f"https://www.discogs.com/release/{r['rid']}" if r["rid"] else "")
         ws.append([("yes" if r[k] else "no") if isinstance(r[k], bool) else r[k] for k, _ in cols])
@@ -134,7 +149,6 @@ def write_xlsx(rows, path):
                 c.fill = PatternFill("solid", fgColor="63BE7B" if v <= 0.7 else "C6EFCE" if v <= 0.85 else "FFF2CC" if v <= 1.15 else "F8CBAD" if v <= 1.5 else "F4877A")
             elif k == "flag" and c.value in fill:
                 c.fill = PatternFill("solid", fgColor=fill[c.value])
-    wb.save(path)
 
 
 def main():
