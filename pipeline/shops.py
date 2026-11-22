@@ -50,10 +50,81 @@ def fetch_listing(shop):
     return uniq
 
 
+def _grade(s):
+    """Shop wording for a record's condition -> the Discogs grade name."""
+    s = s.lower()
+    for key, grade in (("near mint", "Near Mint"), ("nm", "Near Mint"), ("very good plus", "Very Good Plus"), ("vg+", "Very Good Plus"),
+                       ("very good", "Very Good"), ("vg", "Very Good"), ("good plus", "Good Plus"), ("g+", "Good Plus"),
+                       ("mint", "Mint"), ("good", "Good"), ("fair", "Fair"), ("poor", "Poor")):
+        if key in s:
+            return grade
+    return ""
+
+
+def fetch_cscart(shop):
+    """All products of a CS-Cart shop listing (Zaharias Records): the listing gives name, price and link,
+    each product page gives barcode / catalogue number, label, year and condition.
+
+    Returns them in the Store API's shape, so parse() handles every kind of shop."""
+    found, page = {}, 1
+    sep = "&" if "?" in shop["cscart"] else "?"
+    while page <= 200:
+        body, _ = http_get(f"{shop['cscart']}{sep}items_per_page=96&page={page}")
+        if body is None:
+            return None
+        blocks = re.split(r'(?=<div class="ty-grid-list__item )', body.decode("utf-8", "ignore"))[1:]
+        if not blocks and page == 1:
+            return None  # the page layout changed: keep last week's copy rather than an empty shop
+        new = 0
+        for b in blocks:
+            t = re.search(r'<a href="([^"]+)" class="product-title"[^>]*>(.*?)</a>', b, re.S)
+            pid = re.search(r'name="product_data\[(\d+)\]\[product_id\]"', b)
+            price = re.search(r'id="sec_discounted_price_\d+"[^>]*>([\d.,]+)', b)
+            if not (t and pid and price) or pid.group(1) in found:
+                continue
+            was = re.search(r'id="sec_list_price_\d+"[^>]*>([\d.,]+)', b)
+            cents = lambda m: int(round(float(m.group(1).replace(",", "")) * 100))
+            found[pid.group(1)] = {
+                "id": int(pid.group(1)), "name": strip_html(t.group(2)), "permalink": html.unescape(t.group(1)),
+                "prices": {"price": cents(price), "regular_price": cents(was) if was else cents(price)},
+                "on_sale": bool(was) and cents(was) > cents(price),
+            }
+            new += 1
+        if not new or len(blocks) < 96:
+            break
+        page += 1
+        time.sleep(1.5)
+    for x in found.values():
+        body, _ = http_get(x["permalink"], tries=3)
+        if body is None:
+            return None
+        p = body.decode("utf-8", "ignore")
+        f = {strip_html(k).strip(" :"): strip_html(v) for k, v in re.findall(
+            r'ty-product-feature__label[^>]*>(.*?)</(?:div|span)>.*?ty-product-feature__value[^>]*>(.*?)</div>', p, re.S)}
+        code = re.search(r'id="product_code_\d+"[^>]*>\s*([^<]*)', p)
+        used = bool(f.get("HAND")) and "new" not in f["HAND"].lower()
+        names = {"Artist": "Artist", "Format": "Format", "Label": "Label", "Year": "Release Year"}
+        x.update({
+            "sku": html.unescape(code.group(1)).strip() if code else "",
+            "is_in_stock": "OutOfStock" not in p, "is_on_backorder": False, "used": used,
+            "variant": f.get("Details", ""),
+            "attributes": [{"name": names[k], "terms": [{"name": v.strip()} for v in (f[k].split(",") if k == "Label" else [f[k]]) if v.strip()]}
+                           for k in names if f.get(k)]
+                          + ([{"name": "Media Condition", "terms": [{"name": _grade(f.get("Media condition", ""))}]},
+                              {"name": "Sleeve Condition", "terms": [{"name": _grade(f.get("Sleeve condition", ""))}]}] if used else []),
+            "categories": [{"name": f["Style / Genre"]}] if f.get("Style / Genre") else [],
+            "short_description": " ".join(v for v in (f.get("Details"), f.get("Country")) if v),
+        })
+        time.sleep(1)
+    return list(found.values())
+
+
 def fetch_products(shop):
     """All products from the shop's public WooCommerce Store API, or None if the shop is unreachable."""
     if shop.get("listing"):
         return fetch_listing(shop)
+    if shop.get("cscart"):
+        return fetch_cscart(shop)
     out, page, pages = [], 1, 1
     while page <= pages:
         url = f"{shop['base']}/wp-json/wc/store/v1/products?per_page=100&page={page}&orderby=id&order=asc{shop.get('query', '')}"
@@ -124,6 +195,7 @@ def parse(shop, x):
         artist, title, variant = "", name, ""
     if at.get("Artist"):
         artist = at["Artist"][0]
+    variant = x.get("variant") or variant
     desc = strip_html(x.get("short_description")) or strip_html(x.get("description"))
     fmt = detect_format(variant) or detect_format(" ".join(at.get("Format", [])))
     if not fmt and parens:
@@ -146,7 +218,7 @@ def parse(shop, x):
             uniq[k] = l
     labels = list(uniq.values())
     year = (at.get("Release Year") or [""])[0]
-    used = shop["kind"] == "used" or bool(re.search(r"used", variant, re.I))
+    used = shop["kind"] == "used" or bool(x.get("used")) or bool(re.search(r"used", variant, re.I))
     genre = next((c for c in cats if "|" in c and "Upcoming" not in c), "") or next(
         (c for c in cats if c not in ("New Arrivals", "Store", "Sale") and not c.isupper() and not detect_format(c)), "")
     return {

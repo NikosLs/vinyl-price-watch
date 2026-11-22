@@ -27,6 +27,7 @@ Add an entry to `shops.json`:
 - `kind` is `used` (compare against the record's own grade) or `new` (compare against Near Mint).
 
 - `listing` is for WooCommerce shops that keep the Store API closed (Mr Vinylios Records): give the address of a category page and the catalogue is read from the shop's own category pages instead. Only that category is downloaded.
+- `cscart` is for CS-Cart shops (Zaharias Records): give the address of a listing, filters included. Each product page is opened for the barcode / catalogue number, label, year and condition.
 - `sku_is_id: true` is for shops whose product code holds the barcode or, failing that, the catalogue number; it is then used for exact matching.
 
 Shops on other platforms need their own download function in `pipeline/shops.py`.
