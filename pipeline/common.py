@@ -19,6 +19,7 @@ def http_get(url, headers=None, tries=4, timeout=40):
     """Return (body_bytes, response_headers) or (None, None) after repeated failures."""
     h = {"User-Agent": BROWSER_UA, "Accept": "application/json, text/html;q=0.9, */*;q=0.8"}
     h.update(headers or {})
+    url = urllib.parse.quote(url, safe=":/?&=%#+,;@[]!$'()*~")  # addresses with accented or Greek letters
     for attempt in range(tries):
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=timeout) as r:

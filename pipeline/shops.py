@@ -94,10 +94,12 @@ def fetch_cscart(shop):
             break
         page += 1
         time.sleep(1.5)
+    failed = []
     for x in found.values():
         body, _ = http_get(x["permalink"], tries=3)
-        if body is None:
-            return None
+        if body is None:  # one dead product page must not cost the whole shop
+            failed.append(str(x["id"]))
+            continue
         p = body.decode("utf-8", "ignore")
         f = {strip_html(k).strip(" :"): strip_html(v) for k, v in re.findall(
             r'ty-product-feature__label[^>]*>(.*?)</(?:div|span)>.*?ty-product-feature__value[^>]*>(.*?)</div>', p, re.S)}
@@ -106,7 +108,7 @@ def fetch_cscart(shop):
         names = {"Artist": "Artist", "Format": "Format", "Label": "Label", "Year": "Release Year"}
         x.update({
             "sku": html.unescape(code.group(1)).strip() if code else "",
-            "is_in_stock": "OutOfStock" not in p, "is_on_backorder": False, "used": used,
+            "is_in_stock": "OutOfStock" not in p, "is_on_backorder": False, "used": used, "vinyl": True,
             "variant": f.get("Details", ""),
             "attributes": [{"name": names[k], "terms": [{"name": v.strip()} for v in (f[k].split(",") if k == "Label" else [f[k]]) if v.strip()]}
                            for k in names if f.get(k)]
@@ -116,7 +118,11 @@ def fetch_cscart(shop):
             "short_description": " ".join(v for v in (f.get("Details"), f.get("Country")) if v),
         })
         time.sleep(1)
-    return list(found.values())
+    if failed:
+        print(f"[{shop['id']}] {len(failed)} product pages did not open: {', '.join(failed[:10])}", flush=True)
+    if len(failed) > len(found) / 10:
+        return None
+    return [x for x in found.values() if str(x["id"]) not in failed]
 
 
 def fetch_products(shop):
@@ -198,7 +204,7 @@ def parse(shop, x):
     variant = x.get("variant") or variant
     desc = strip_html(x.get("short_description")) or strip_html(x.get("description"))
     fmt = detect_format(variant) or detect_format(" ".join(at.get("Format", [])))
-    if not fmt and parens:
+    if not fmt and (parens or x.get("vinyl")):
         fmt = detect_format(name) or "LP"
     if not fmt:
         fmt = "Merch/Other" if any(k in cj.lower() for k in MERCH) else (detect_format(cj) or ("LP" if at.get("Format") else "Merch/Other"))

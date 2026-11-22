@@ -38,7 +38,7 @@
     "id": "zaharias",
     "name": "Zaharias Records",
     "base": "https://zaharias-records.gr",
-    "cscart": "https://zaharias-records.gr/en/vinyl/?features_hash=10-111",
+    "cscart": "https://zaharias-records.gr/en/vinyl/",
     "kind": "new",
     "catno_from_page": false,
     "sku_is_id": true
