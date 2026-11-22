@@ -52,6 +52,8 @@ def confidence(m, it):
             year = 0
         if m["match"] == "artist+title" and year and year < datetime.date.today().year - 15:
             conf = "low"      # a shop selling new copies almost never has the decades-old original
+        elif year and year < datetime.date.today().year - 15 and conf in ("exact", "high"):
+            conf = "medium"   # reissues often keep the original's barcode / catalogue number: the price is the old pressing's
     return conf
 
 
@@ -201,7 +203,7 @@ def main():
                 if cat is not None:
                     state["catnos"][sid][it["id"]] = cat
                 time.sleep(0.8)
-            m = match_item(dg, it, state["catnos"][sid].get(it["id"], ""))
+            m = match_item(dg, it, state["catnos"][sid].get(it["id"], "") or it.get("catno", ""))
             m["name"], m["ts"] = it["name"], int(time.time())
             state["matches"][sid][it["id"]] = m
             new += 1

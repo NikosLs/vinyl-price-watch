@@ -26,6 +26,9 @@ Add an entry to `shops.json`:
 - `variant: "parens"` is for shops that name products `Artist – Title (2LP Red)`; without it the name is read as `Artist – Title – LP`.
 - `kind` is `used` (compare against the record's own grade) or `new` (compare against Near Mint).
 
+- `listing` is for WooCommerce shops that keep the Store API closed (Mr Vinylios Records): give the address of a category page and the catalogue is read from the shop's own category pages instead. Only that category is downloaded.
+- `sku_is_id: true` is for shops whose product code holds the barcode or, failing that, the catalogue number; it is then used for exact matching.
+
 Shops on other platforms need their own download function in `pipeline/shops.py`.
 
 ## Running locally

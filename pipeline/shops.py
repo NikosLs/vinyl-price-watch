@@ -7,8 +7,53 @@ Q = "[″”\"′’']"  # the various inch / quote marks shops use
 MERCH = ("t-shirt", "hoodie", "pins", "patches", "magnets", "slipmats", "tote", "books", "accessories", "clothing")
 
 
+def fetch_listing(shop):
+    """All products of a WooCommerce shop read from its category pages (for shops whose Store API is closed).
+
+    Returns them in the Store API's shape, so parse() handles both kinds of shop."""
+    out, page, pages = [], 1, 1
+    base = shop["listing"].rstrip("/") + "/"
+    while page <= pages:
+        body, _ = http_get(base if page == 1 else f"{base}page/{page}/")
+        if body is None:
+            return None
+        h = body.decode("utf-8", "ignore")
+        pages = max([pages] + [int(n) for n in re.findall(r"/page/(\d+)/", h)])
+        blocks = re.split(r'(?=<div class="[^"]*\btype-product\b)', h)[1:]
+        if not blocks:
+            return None  # the page layout changed: keep last week's copy rather than an empty shop
+        for b in blocks:
+            cls = re.match(r'<div class="([^"]*)"', b).group(1).split()
+            t = re.search(r'wd-entities-title"[^>]*>\s*<a href="([^"]+)"[^>]*>(.*?)</a>', b, re.S)
+            pid = next((c[5:] for c in cls if re.fullmatch(r"post-\d+", c)), "")
+            amount = lambda frag: [int(round(float(v.replace(",", "")) * 100)) for v in re.findall(r"<bdi>\s*([\d.,]+)", frag or "")]
+            price_html = (re.search(r'<span class="price">(.*?)</span>\s*(?:<div|</div)', b, re.S) or [None, b])[1]
+            was = amount((re.search(r"<del.*?</del>", price_html, re.S) or [""])[0])
+            now = amount((re.search(r"<ins.*?</ins>", price_html, re.S) or [""])[0]) or amount(price_html)
+            if not (t and pid and now):
+                continue
+            sku = re.search(r'data-product_sku="([^"]*)"', b)
+            out.append({
+                "id": int(pid), "name": strip_html(t.group(2)), "permalink": html.unescape(t.group(1)),
+                "prices": {"price": now[-1] if was else now[0], "regular_price": was[0] if was else now[0]},
+                "on_sale": bool(was), "is_in_stock": "outofstock" not in cls, "is_on_backorder": "onbackorder" in cls,
+                "sku": html.unescape(sku.group(1)).strip() if sku else "",
+                "categories": [{"name": c[12:].replace("-en", "").replace("-", " ").title()} for c in cls if c.startswith("product_cat-")],
+            })
+        page += 1
+        time.sleep(1.5)
+    seen, uniq = set(), []
+    for x in out:
+        if x["id"] not in seen:
+            seen.add(x["id"])
+            uniq.append(x)
+    return uniq
+
+
 def fetch_products(shop):
     """All products from the shop's public WooCommerce Store API, or None if the shop is unreachable."""
+    if shop.get("listing"):
+        return fetch_listing(shop)
     out, page, pages = [], 1, 1
     while page <= pages:
         url = f"{shop['base']}/wp-json/wc/store/v1/products?per_page=100&page={page}&orderby=id&order=asc{shop.get('query', '')}"
@@ -67,6 +112,10 @@ def parse(shop, x):
         core = re.split(r"\s+[–-]\s+", name[:pm.start()] if pm else name, maxsplit=1)
         artist, title = (core[0], core[1]) if len(core) == 2 else ("", core[0])
         variant = pm.group(1).strip() if pm else ""
+        if pm and not detect_format(variant):  # "Title (LP, Red Vinyl) (RSD)": the format sits one bracket earlier
+            pm2 = re.search(r"\s*\(([^()]*)\)\s*$", name[:pm.start()])
+            if pm2 and detect_format(pm2.group(1)):
+                variant = pm2.group(1).strip() + ", " + variant
     elif len(parts) >= 3:
         artist, title, variant = parts[0], " – ".join(parts[1:-1]), parts[-1]
     elif len(parts) == 2:
@@ -83,6 +132,10 @@ def parse(shop, x):
         fmt = "Merch/Other" if any(k in cj.lower() for k in MERCH) else (detect_format(cj) or ("LP" if at.get("Format") else "Merch/Other"))
     bm = re.search(r"(?:UPC|EAN|Barcode)\s*:?\s*([\d][\d \-]{7,18}\d)", desc, re.I)
     lm = re.search(r"Label\s*:\s*(.+?)(?=\s*(?:UPC|EAN|Barcode|https?:|Tracklist|Track Listing|$))", desc, re.I)
+    # Some shops put the barcode, or failing that the catalogue number, in the product code.
+    sku = (x.get("sku") or "").strip() if shop.get("sku_is_id") else ""
+    sku_digits = re.sub(r"[\s\-]", "", sku)
+    sku_barcode = sku_digits if re.fullmatch(r"\d{10,14}", sku_digits) else ""
     labels = list(at.get("Label", [])) + [t for t in tags if "record" in t.lower()]
     if lm and len(lm.group(1)) < 70:
         labels += [l.strip(" .,") for l in re.split(r",\s*|/", lm.group(1)) if l.strip(" .,")]
@@ -104,5 +157,6 @@ def parse(shop, x):
         "pre": ("Upcoming | Pre-order" in cats) or any(c.upper().startswith("PRE-ORDER") for c in cats) or bool(re.search(r"UPCOMING|PRE-ORDER", name, re.I)),
         "used": used, "media": (at.get("Media Condition") or [""])[0], "sleeve": (at.get("Sleeve Condition") or [""])[0],
         "labels": labels, "year": year if re.fullmatch(r"(19|20)\d\d", year) else "",
-        "barcode": re.sub(r"\D", "", bm.group(1)) if bm else "", "genre": genre, "desc": desc[:700], "url": x["permalink"],
+        "barcode": re.sub(r"\D", "", bm.group(1)) if bm else sku_barcode,
+        "catno": "" if sku_barcode else sku, "genre": genre, "desc": desc[:700], "url": x["permalink"],
     }

@@ -23,5 +23,15 @@
     "kind": "new",
     "catno_from_page": false,
     "variant": "parens"
+  },
+  {
+    "id": "mrvinylios",
+    "name": "Mr Vinylios Records",
+    "base": "https://mrvinyliosrecords.gr",
+    "listing": "https://mrvinyliosrecords.gr/en/product-category/lp-en/new-wave/",
+    "kind": "new",
+    "catno_from_page": false,
+    "variant": "parens",
+    "sku_is_id": true
   }
 ]
