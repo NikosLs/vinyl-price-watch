@@ -74,6 +74,8 @@ def _score(hit, it, labs, cols, title, used):
     if any(x in fj for x in ("Test Pressing", "Promo", "Acetate", "White Label")): s -= 3
     if any(x in fj for x in ("Club Edition", "Numbered")) and not re.search(r"number|club", it["variant"] + " " + it["desc"], re.I):
         s -= 2
+    if any(x in fj for x in ("Mispress", "Misprint")) and not re.search(r"mispress|misprint", it["variant"] + " " + it["desc"], re.I):
+        s -= 3
     return s
 
 

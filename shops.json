@@ -54,5 +54,15 @@
     "kind": "new",
     "catno_from_page": false,
     "sku_is_id": true
+  },
+  {
+    "id": "todiskadiko",
+    "name": "To Diskadiko",
+    "base": "https://todiskadiko.com",
+    "query": "&category=119",
+    "kind": "new",
+    "catno_from_page": false,
+    "sku_is_id": true,
+    "discogs_desc": true
   }
 ]

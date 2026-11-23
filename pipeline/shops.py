@@ -269,8 +269,26 @@ def parse(shop, x):
     variant = x.get("variant") or variant
     title = x.get("title") or title
     desc = strip_html(x.get("short_description")) or strip_html(x.get("description"))
+    dd = {}
+    if shop.get("discogs_desc"):
+        # The description is the record's Discogs header: "Label: A, B – CATNO Format: Vinyl, LP, Blue Country: .. Released: .. Genre: .. Style: .."
+        full = re.sub("[​-‏‪-‮﻿]", "", strip_html(x.get("description")))
+        stop = r"\s*(?:Label:|Series:|Format:|Country:|Released:|Genre:|Style:|Tracklist|Notes|$)"
+        dd = {k: (re.search(k + r":\s*(.*?)" + stop, full) or ["", ""])[1] for k in ("Label", "Format", "Released", "Style", "Genre")}
+        pairs = re.findall(r"(.+?)\s+[–-]\s+(.+?)(?:\s*,\s+|$)", dd["Label"])
+        dd["labels"] = [re.sub(r"\s*\(\d+\)$", "", l).strip() for names, _ in pairs for l in names.split(",") if l.strip()]
+        dd["catno"] = next((c.strip() for _, c in pairs if c.strip().lower() != "none"), "")
+        dd["year"] = (re.findall(r"\b((?:19|20)\d\d)\b", dd["Released"]) or [""])[-1]
+        title = re.sub(r"\s+\d?x?LP$", "", title, flags=re.I)
+        variant = ", ".join(v for v in (variant, dd["Format"]) if v)
+        if dd["labels"]:
+            at["Label"] = dd["labels"]
+        if dd["year"]:
+            at["Release Year"] = [dd["year"]]
+        if dd["Label"]:
+            desc = full  # keep the cleaned text; the label line is already read, see `lm` below
     fmt = detect_format(variant) or detect_format(" ".join(at.get("Format", [])))
-    if not fmt and (parens or x.get("vinyl")):
+    if not fmt and (parens or x.get("vinyl") or shop.get("discogs_desc")):
         fmt = detect_format(name) or "LP"
     if not fmt:
         fmt = "Merch/Other" if any(k in cj.lower() for k in MERCH) else (detect_format(cj) or ("LP" if at.get("Format") else "Merch/Other"))
@@ -278,6 +296,9 @@ def parse(shop, x):
     lm = re.search(r"Label\s*:\s*(.+?)(?=\s*(?:UPC|EAN|Barcode|https?:|Tracklist|Track Listing|$))", desc, re.I)
     # Some shops put the barcode, or failing that the catalogue number, in the product code.
     sku = (x.get("sku") or "").strip() if shop.get("sku_is_id") else ""
+    if dd:  # product code = supplier's three letters + barcode ("MLK075678576379"), else a catalogue number
+        sku = re.sub(r"^[A-Za-z]{2,4}\s*(?=[\d\s\-]{10,}$)", "", sku)
+        lm = None
     sku_digits = re.sub(r"[\s\-]", "", sku)
     sku_barcode = sku_digits if re.fullmatch(r"\d{10,14}", sku_digits) else ""
     labels = list(at.get("Label", [])) + [t for t in tags if "record" in t.lower()]
@@ -293,6 +314,8 @@ def parse(shop, x):
     used = shop["kind"] == "used" or bool(x.get("used")) or bool(re.search(r"used", variant, re.I))
     genre = next((c for c in cats if "|" in c and "Upcoming" not in c), "") or next(
         (c for c in cats if c not in ("New Arrivals", "Store", "Sale") and not c.isupper() and not detect_format(c)), "")
+    # a description without the "Tracklist" heading runs straight into "A1 Song ..": cut there
+    genre = re.split(r"\s+(?:[A-HΑ-Θ]\d{0,2}|\d{1,2})[.\s]", dd.get("Style") or dd.get("Genre") or genre)[0][:60]
     return {
         "id": str(x["id"]), "name": name, "artist": artist, "title": title, "variant": variant, "format": fmt,
         "price": int(x["prices"]["price"]) / 100, "regular": int(x["prices"]["regular_price"]) / 100,
@@ -302,6 +325,6 @@ def parse(shop, x):
         "used": used, "media": (at.get("Media Condition") or [""])[0], "sleeve": (at.get("Sleeve Condition") or [""])[0],
         "labels": labels, "year": year if re.fullmatch(r"(19|20)\d\d", year) else "",
         "barcode": re.sub(r"\D", "", bm.group(1)) if bm else sku_barcode,
-        "catno": "" if sku_barcode else sku, "listing": (x.get("sku") or "").strip() if shop.get("variant") == "discogs" else "",
+        "catno": dd.get("catno") or ("" if sku_barcode else sku), "listing": (x.get("sku") or "").strip() if shop.get("variant") == "discogs" else "",
         "genre": genre, "desc": desc[:700], "url": x["permalink"],
     }

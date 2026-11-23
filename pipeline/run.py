@@ -1,6 +1,6 @@
 """Weekly refresh: download every shop, match new records on Discogs, refresh prices, publish encrypted data.
 
-Usage:  python -m pipeline.run [--xlsx] [--no-fetch] [--rebuild]
+Usage:  python -m pipeline.run [--xlsx] [--no-fetch] [--rebuild] [--only=SHOP_ID]
 Needs DISCOGS_TOKEN and APP_PASSWORD (environment or a local .env file).
 """
 import datetime, json, os, re, sys, time
@@ -33,6 +33,9 @@ def confidence(m, it):
         conf = "high" if ok else "medium"
     else:
         return "low"
+    if re.search(r"mispress|misprint", (m.get("d_format") or "") + " " + (m.get("d_text") or ""), re.I) and not re.search(
+            r"mispress|misprint", it["name"] + " " + it["desc"], re.I):
+        conf = "medium"       # the faulty pressing shares the catalogue number with the regular one and sells for more
     if not it["used"]:
         # New stock: these signs point to a different edition sharing the title or the barcode.
         want = {c for c in COLOURS if c in norm(it["variant"])}
@@ -168,8 +171,11 @@ def main():
     stale = []
     save = lambda: None if rebuild else open(STATE, "wb").write(encrypt_json(state, password))  # checkpoint: an interrupted run loses nothing
 
+    only = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--only=")), "")  # download and match just this shop
     for shop in ([] if rebuild else shops):
         sid = shop["id"]
+        if only and sid != only:
+            continue
         for k in ("matches", "catnos", "seen", "was"):
             state[k].setdefault(sid, {})
         if "--no-fetch" not in sys.argv:
