@@ -125,8 +125,56 @@ def fetch_cscart(shop):
     return [x for x in found.values() if str(x["id"]) not in failed]
 
 
+def fetch_dirtynoise(shop):
+    """Dirty Noise: its catalogue pages list artist, title, format, label, genre, barcode and price.
+    `catalog` in shops.json is a list of filtered catalogue addresses; a record found in several is kept once.
+
+    Returns the products in the Store API's shape, so parse() handles every kind of shop."""
+    found = {}
+    for base in shop["catalog"]:
+        page, pages = 1, 1
+        while page <= pages:
+            body, _ = http_get(f"{base}&per_page=100&page={page}")
+            if body is None:
+                return None
+            h = body.decode("utf-8", "ignore")
+            total = re.search(r"There are (\d+) products", h)
+            blocks = re.split(r'(?=<div class="basis-auto xs:basis-2/3)', h)[1:]
+            if not total or (not blocks and int(total.group(1))):
+                return None  # the page layout changed: keep last week's copy rather than an empty shop
+            pages = -(-int(total.group(1)) // 100)
+            for b in blocks:
+                pid = re.search(r'name="wishlist_product_id"[^>]*value="(\d+)"', b)
+                artist = re.search(r"fa-microphone[^>]*></i>(.*?)</a>", b, re.S)
+                t = re.search(r'<a href="([^"]+/product/[^"]+)"[^>]*>\s*<i class="fa-solid fa-record-vinyl[^>]*></i>(.*?)</a>', b, re.S)
+                box = re.search(r'<div class="text-red text-lg font-bold mb-4">(.*?)</div>', b, re.S)
+                euros = [int(round(float(v.replace(",", "")) * 100)) for v in re.findall(r"€\s*([\d.,]+)", box.group(1) if box else "")]
+                if not (pid and t and euros):
+                    continue
+                field = lambda label: strip_html((re.search(r"<span>" + label + r": </span>(.*?)</div>", b, re.S) or ["", ""])[1])
+                title = strip_html(t.group(2))
+                vm = re.search(r"\(([^()]*)\)\s*$", title)
+                found[pid.group(1)] = {
+                    "id": int(pid.group(1)), "name": f"{strip_html(artist.group(1)) if artist else ''} – {title}", "title": title,
+                    "variant": ", ".join(v for v in (field("Format").split(" Type")[0], vm.group(1) if vm else "") if v),
+                    "permalink": html.unescape(t.group(1)),
+                    "prices": {"price": euros[-1], "regular_price": euros[0]}, "on_sale": len(euros) > 1 and euros[0] > euros[-1],
+                    "is_in_stock": "Ships in 1-3 days" in b, "is_on_backorder": "days after you place your order" in b,
+                    "sku": field("EAN/UPC"), "vinyl": True,
+                    "attributes": [{"name": "Artist", "terms": [{"name": strip_html(artist.group(1))}]}] * bool(artist)
+                                  + [{"name": "Label", "terms": [{"name": l.strip()} for l in field("Labels").split(",") if l.strip()]}] * bool(field("Labels")),
+                    "categories": [{"name": field("Genres")}] if field("Genres") else [],
+                    "short_description": field("Type"),
+                }
+            page += 1
+            time.sleep(1.5)
+    return list(found.values())
+
+
 def fetch_products(shop):
     """All products from the shop's public WooCommerce Store API, or None if the shop is unreachable."""
+    if shop.get("catalog"):
+        return fetch_dirtynoise(shop)
     if shop.get("listing"):
         return fetch_listing(shop)
     if shop.get("cscart"):
@@ -199,9 +247,27 @@ def parse(shop, x):
         artist, title, variant = parts[0], parts[1], ""
     else:
         artist, title, variant = "", name, ""
+    if shop.get("variant") == "discogs":
+        # Shop fed from its own Discogs inventory: "Artist – Title – Near Mint (NM or M-) – Vinyl", product code = Discogs listing number
+        gm = re.match(r"(.*?)\s+[–-]\s+(.*)\s+[–-]\s+((?:Mint|Near Mint|Very Good|Good|Fair|Poor|Generic|Not Graded)[^–]*?)\s+[–-]\s+[\w, ]+$", name)
+        full = strip_html(x.get("description"))
+        dm = re.search(r"Description:\s*(.*?)\s*(?:Condition:|$)", full)
+        sm = re.search(r"Condition:\s*(.+)", full)
+        if gm:
+            artist, title = gm.group(1), gm.group(2)
+            at["Media Condition"] = [_grade(gm.group(3))]
+        variant = dm.group(1) if dm else ""
+        at["Sleeve Condition"] = [_grade(sm.group(1))] if sm else [""]
+        um = re.match(r"(.*?)\s+[–-]\s+(.*)\s+[–-]\s+\(([\w+-]+)/([\w+-]+)\)\s+[–-]\s+Vinyl", name)
+        if um and not gm:  # records the shop cannot list on Discogs: "Artist – Title – (NM/VG+) – Vinyl"
+            short = {"M": "Mint", "NM": "Near Mint", "M-": "Near Mint", "VG+": "Very Good Plus", "VG": "Very Good", "G+": "Good Plus", "G": "Good"}
+            artist, title = um.group(1), um.group(2)
+            variant = re.split(r"\s*Media Condition", variant)[0]
+            at["Media Condition"], at["Sleeve Condition"] = [short.get(um.group(3).upper(), "")], [short.get(um.group(4).upper(), "")]
     if at.get("Artist"):
         artist = at["Artist"][0]
     variant = x.get("variant") or variant
+    title = x.get("title") or title
     desc = strip_html(x.get("short_description")) or strip_html(x.get("description"))
     fmt = detect_format(variant) or detect_format(" ".join(at.get("Format", [])))
     if not fmt and (parens or x.get("vinyl")):
@@ -236,5 +302,6 @@ def parse(shop, x):
         "used": used, "media": (at.get("Media Condition") or [""])[0], "sleeve": (at.get("Sleeve Condition") or [""])[0],
         "labels": labels, "year": year if re.fullmatch(r"(19|20)\d\d", year) else "",
         "barcode": re.sub(r"\D", "", bm.group(1)) if bm else sku_barcode,
-        "catno": "" if sku_barcode else sku, "genre": genre, "desc": desc[:700], "url": x["permalink"],
+        "catno": "" if sku_barcode else sku, "listing": (x.get("sku") or "").strip() if shop.get("variant") == "discogs" else "",
+        "genre": genre, "desc": desc[:700], "url": x["permalink"],
     }

@@ -6,7 +6,7 @@ Needs DISCOGS_TOKEN and APP_PASSWORD (environment or a local .env file).
 import datetime, json, os, re, sys, time
 
 from .common import ROOT, Discogs, decrypt_json, encrypt_json, load_env, norm
-from .match import COLOURS, match_item
+from .match import COLOURS, match_item, match_listing
 from .shops import fetch_catno, fetch_products, parse
 
 STATE = os.path.join(ROOT, "state.enc")
@@ -26,7 +26,7 @@ def confidence(m, it):
     """How sure we are that the Discogs release is the very edition the shop sells."""
     if not m.get("release_id"):
         return ""
-    if m["match"] in ("catno", "barcode"):
+    if m["match"] in ("catno", "barcode", "listing"):
         conf = "exact" if not m.get("tie") else "high"
     elif m["match"] == "artist+title":
         ok = (m.get("title_ok") or m.get("year_ok")) and (m.get("label_ok") or not it["labels"])
@@ -203,7 +203,8 @@ def main():
                 if cat is not None:
                     state["catnos"][sid][it["id"]] = cat
                 time.sleep(0.8)
-            m = match_item(dg, it, state["catnos"][sid].get(it["id"], "") or it.get("catno", ""))
+            m = match_listing(dg, it["listing"]) if it.get("listing") else {}
+            m = m or match_item(dg, it, state["catnos"][sid].get(it["id"], "") or it.get("catno", ""))
             m["name"], m["ts"] = it["name"], int(time.time())
             state["matches"][sid][it["id"]] = m
             new += 1

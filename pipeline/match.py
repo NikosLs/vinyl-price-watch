@@ -77,6 +77,21 @@ def _score(hit, it, labs, cols, title, used):
     return s
 
 
+def match_listing(dg, listing_id):
+    """The release behind one of the shop's own Discogs listings: the exact copy, no searching needed."""
+    r = (dg.get(f"marketplace/listings/{listing_id}") or {}).get("release") or {}
+    if not r.get("id"):
+        return {}
+    com = (r.get("stats") or {}).get("community") or {}
+    fmt = [f.strip() for f in (r.get("format") or "").split(",") if f.strip()]
+    return {
+        "match": "listing", "score": 0, "n_hits": 1, "tie": False,
+        "release_id": r["id"], "d_title": f"{r.get('artist', '')} - {r.get('title', '')}", "d_year": r.get("year") or "", "d_country": "",
+        "d_label": r.get("label") or "", "d_catno": r.get("catalog_number") or "", "d_format": ", ".join(["Vinyl"] + fmt), "d_text": "",
+        "label_ok": True, "title_ok": True, "year_ok": True, "have": com.get("in_collection"), "want": com.get("in_wantlist"),
+    }
+
+
 def match_item(dg, it, catno=""):
     """Return a match dict (empty if nothing plausible was found)."""
     used = it["used"]

@@ -42,5 +42,17 @@
     "kind": "new",
     "catno_from_page": false,
     "sku_is_id": true
+  },
+  {
+    "id": "dirtynoise",
+    "name": "Dirty Noise",
+    "base": "https://www.dirtynoise.gr",
+    "catalog": [
+      "https://www.dirtynoise.gr/catalog?availability=in_stock&formats=vinyl&genres=alternative-indie",
+      "https://www.dirtynoise.gr/catalog?availability=in_stock&formats=vinyl&genres=post-punk"
+    ],
+    "kind": "new",
+    "catno_from_page": false,
+    "sku_is_id": true
   }
 ]
