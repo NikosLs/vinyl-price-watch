@@ -77,5 +77,15 @@
     "catno_from_page": false,
     "variant": "parens",
     "sku_is_id": true
+  },
+  {
+    "id": "mono",
+    "name": "Mono Record Store",
+    "base": "https://monorecordstore.gr",
+    "query": "&category=61237",
+    "kind": "new",
+    "catno_from_page": false,
+    "discogs_desc": true,
+    "sku_is_listing": true
   }
 ]

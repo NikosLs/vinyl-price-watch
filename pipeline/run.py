@@ -26,7 +26,9 @@ def confidence(m, it):
     """How sure we are that the Discogs release is the very edition the shop sells."""
     if not m.get("release_id"):
         return ""
-    if m["match"] in ("catno", "barcode", "listing"):
+    if m["match"] == "listing":
+        return "exact"        # the shop's own Discogs listing: the very copy, no edition to mix up
+    if m["match"] in ("catno", "barcode"):
         conf = "exact" if not m.get("tie") else "high"
     elif m["match"] == "artist+title":
         ok = (m.get("title_ok") or m.get("year_ok")) and (m.get("label_ok") or not it["labels"])

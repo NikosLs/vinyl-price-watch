@@ -347,6 +347,15 @@ def parse(shop, x):
     bm = re.search(r"(?:UPC|EAN|Barcode)\s*:?\s*([\d][\d \-]{7,18}\d)", desc, re.I)
     lm = re.search(r"Label\s*:\s*(.+?)(?=\s*(?:UPC|EAN|Barcode|https?:|Tracklist|Track Listing|$))", desc, re.I)
     # Some shops put the barcode, or failing that the catalogue number, in the product code.
+    if shop.get("sku_is_listing"):
+        # Shop synced from its Discogs seller account (Mono Record Store): the product code is the Discogs listing number,
+        # artist / title / label / grades come as attributes ("Belle And Sebastian*", "Very Good Plus (VG+)"), tag Used or New.
+        artist = re.sub(r"\s*(\*|\(\d+\))$", "", artist)
+        title = (at.get("Title") or [title])[0]
+        at["Label"] = [l.strip() for t in at.get("Label", []) for l in t.split(",") if l.strip()]
+        for k in ("Media Condition", "Sleeve Condition"):
+            at[k] = [_grade((at.get(k) or [""])[0])]
+        x = dict(x, used="Used" in tags)
     sku = (x.get("sku") or "").strip() if shop.get("sku_is_id") else ""
     if dd:  # product code = supplier's three letters + barcode ("MLK075678576379"), else a catalogue number
         sku = re.sub(r"^[A-Za-z]{2,4}\s*(?=[\d\s\-]{10,}$)", "", sku)
@@ -377,6 +386,6 @@ def parse(shop, x):
         "used": used, "media": (at.get("Media Condition") or [""])[0], "sleeve": (at.get("Sleeve Condition") or [""])[0],
         "labels": labels, "year": year if re.fullmatch(r"(19|20)\d\d", year) else "",
         "barcode": re.sub(r"\D", "", bm.group(1)) if bm else sku_barcode,
-        "catno": dd.get("catno") or ("" if sku_barcode else sku), "listing": (x.get("sku") or "").strip() if shop.get("variant") == "discogs" else "",
+        "catno": dd.get("catno") or ("" if sku_barcode else sku), "listing": (x.get("sku") or "").strip() if shop.get("variant") == "discogs" or shop.get("sku_is_listing") else "",
         "genre": genre, "desc": desc[:700], "url": x["permalink"],
     }
