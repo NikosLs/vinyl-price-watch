@@ -4,7 +4,7 @@ import re
 from .common import norm
 
 COLOURS = ("red white blue yellow clear orange pink green purple splatter gold silver grey gray marble transparent "
-           "translucent picture brown violet turquoise coloured colored smoke swirl neon magenta bronze cream maroon crystal graphite burgundy fuchsia fuschia bone galaxy lavender mustard beige olive teal aqua cyan ruby amber peach").split()
+           "translucent picture brown violet turquoise coloured colored smoke swirl neon magenta bronze cream maroon crystal graphite burgundy fuchsia fuschia bone galaxy lavender mustard beige olive teal aqua cyan ruby amber peach glow").split()
 EUROPE = {"Europe", "Germany", "UK", "Netherlands", "Italy", "France", "UK & Europe", "Spain", "Belgium", "Austria",
           "Sweden", "Scandinavia", "Benelux", "Switzerland"}
 VINYL_SIZES = ('7"', '10"', '12"')

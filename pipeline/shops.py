@@ -171,8 +171,60 @@ def fetch_dirtynoise(shop):
     return list(found.values())
 
 
+def fetch_itemlist(shop):
+    """Evripidis: each category page embeds its products as a schema.org ItemList (name, link, label, barcode, price).
+    `itemlist` in shops.json is a list of category addresses; further pages are followed, a record found twice is kept once.
+
+    Returns the products in the Store API's shape, so parse() handles every kind of shop."""
+    found, todo, seen = {}, list(shop["itemlist"]), set()
+    while todo:
+        url = todo.pop(0)
+        if url in seen:
+            continue
+        seen.add(url)
+        body, _ = http_get(url)
+        if body is None:
+            return None
+        h = body.decode("utf-8", "ignore")
+        lists = []
+        for block in re.findall(r'<script type="application/ld\+json">(.*?)</script>', h, re.S):
+            try:
+                d = json.loads(block)
+            except Exception:
+                continue
+            if isinstance(d, dict) and d.get("@type") == "ItemList":
+                lists.append(d)
+        if not lists:
+            return None  # the page layout changed: keep last week's copy rather than an empty shop
+        for e in (e for d in lists for e in d.get("itemListElement", [])):
+            p, offer = e.get("item") or {}, (e.get("item") or {}).get("offers") or {}
+            name, sku = html.unescape(p.get("name") or "").strip(), (p.get("sku") or "").strip()
+            try:
+                cents = int(round(float(offer.get("lowPrice") or offer.get("price") or 0) * 100))
+            except Exception:
+                cents = 0
+            if not (name and p.get("url") and cents):
+                continue
+            # "ARTIST - TITLE (MAGENTA) (2 LP)": every trailing bracket describes the pressing
+            core = re.sub(r"(\s*\([^()]*\))+\s*$", "", name)
+            brand = ((p.get("brand") or {}).get("name") or "").strip()
+            found[sku or p["url"]] = {
+                "id": sku or p["url"], "name": name, "permalink": p["url"],
+                "title": re.split(r"\s+[–-]\s+", core, maxsplit=1)[-1], "variant": ", ".join(re.findall(r"\(([^()]*)\)", name[len(core):])),
+                "prices": {"price": cents, "regular_price": cents}, "on_sale": False,
+                "is_in_stock": "InStock" in (offer.get("availability") or ""), "is_on_backorder": False,
+                "sku": sku, "vinyl": True,
+                "attributes": [{"name": "Label", "terms": [{"name": l.strip()} for l in re.split(r"\s+-\s+", brand) if l.strip()]}] * bool(brand),
+            }
+        todo += [html.unescape(u) for u in re.findall(r'<a href="([^"]+)" data-ci-pagination-page="\d+"', h)]
+        time.sleep(1.5)
+    return list(found.values())
+
+
 def fetch_products(shop):
     """All products from the shop's public WooCommerce Store API, or None if the shop is unreachable."""
+    if shop.get("itemlist"):
+        return fetch_itemlist(shop)
     if shop.get("catalog"):
         return fetch_dirtynoise(shop)
     if shop.get("listing"):

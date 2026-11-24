@@ -32,6 +32,7 @@ Add an entry to `shops.json`:
 - `catalog` is for Dirty Noise: a list of filtered catalogue addresses (availability, format, genre). Only those are downloaded; a record found in several is kept once.
 - `sku_is_id: true` is for shops whose product code holds the barcode or, failing that, the catalogue number; it is then used for exact matching.
 - `discogs_desc: true` is for shops whose product description is the record's Discogs header (To Diskadiko: `Label: X – CAT123 Format: Vinyl, LP, Blue … Released: 2024`). Label, catalogue number, pressing details and year are read from it; a product code such as `MLK075678576379` is read as supplier letters + barcode. `"query": "&category=119"` limits the shop to one category (the number comes from `/wp-json/wc/store/v1/products/categories`).
+- `itemlist` is for Evripidis: a list of category addresses. Each page carries its products as a schema.org list (name, label, barcode, price); further pages of a category are followed.
 
 Shops on other platforms need their own download function in `pipeline/shops.py`.
 
