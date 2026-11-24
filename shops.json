@@ -70,7 +70,8 @@
     "name": "Evripidis",
     "base": "https://www.evripidis.gr",
     "itemlist": [
-      "https://www.evripidis.gr/%CE%BC%CE%BF%CF%85%CF%83%CE%B9%CE%BA%CE%B7/%CE%B2%CE%B9%CE%BD%CF%85%CE%BB%CE%B9%CE%B1-%CE%B5%CE%BB%CE%BB%CE%B7%CE%BD%CE%B9%CE%BA%CE%B7%CF%83-%CE%BC%CE%BF%CF%85%CF%83%CE%B9%CE%BA%CE%B7%CF%83/rock.htm"
+      "https://www.evripidis.gr/%CE%BC%CE%BF%CF%85%CF%83%CE%B9%CE%BA%CE%B7/%CE%B2%CE%B9%CE%BD%CF%85%CE%BB%CE%B9%CE%B1-%CE%B5%CE%BB%CE%BB%CE%B7%CE%BD%CE%B9%CE%BA%CE%B7%CF%83-%CE%BC%CE%BF%CF%85%CF%83%CE%B9%CE%BA%CE%B7%CF%83/rock.htm",
+      "https://www.evripidis.gr/%CE%BC%CE%BF%CF%85%CF%83%CE%B9%CE%BA%CE%B7/%CE%B2%CE%B9%CE%BD%CF%85%CE%BB%CE%B9%CE%B1-%CE%BE%CE%B5%CE%BD%CE%B7%CF%83-%CE%BC%CE%BF%CF%85%CF%83%CE%B9%CE%BA%CE%B7%CF%83/alternative-indie.htm"
     ],
     "kind": "new",
     "catno_from_page": false,
